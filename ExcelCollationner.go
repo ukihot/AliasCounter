@@ -15,86 +15,85 @@ const uriageMeisaiSheet string = "uriage"
 const ableCodeSheet string = "有効商品コード"
 const disableCodeSheet string = "無効商品コード"
 
+// Variable names are unified in Lower CamelCase.
+// Prohibit the use of pascal cases and snake cases.
 func main() {
-	// 処理対象データファイルを開く
+	// Open the data file to be processed.
 	database, err := excelize.OpenFile(inputFolderPath + inputFileName)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	// 出力用ファイルを作成
+	// Create an output file.
 	result := excelize.NewFile()
 	result.NewSheet(ableCodeSheet)
 	result.NewSheet(disableCodeSheet)
 	result.DeleteSheet("Sheet1")
 	result.SetActiveSheet(0)
-	// 商品マスタの行ごとにすべてのセルの値を取得し、2次元配列として格納
+	// Retrieves the values of all cells in each row of the product master and stores them as a two-dimensional array.
 	shohinRows, err := database.GetRows(shohinMasterSheet)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	// 売上明細の行ごとにすべてのセルの値を取得し、2次元配列として格納
+	// Retrieves the values of all cells in each row of the sales details and stores them as a two-dimensional array.
 	uriageRows, err := database.GetRows(uriageMeisaiSheet)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	// ヘッダー作成
-	result.SetCellValue(ableCodeSheet, "A1", "有効商品コード")
-	result.SetCellValue(ableCodeSheet, "B1", "使用回数")
-	result.SetCellValue(disableCodeSheet, "A1", "不要商品コード")
-	// 売上明細の商品コードは商品マスタに紐づいているが、売上明細側では商品名が多様に変化している
-	// どのような商品名に変化をしているのか、
-	// 商品マスタ内で不要な商品コードがおそらく８割強あるため、洗い出す
+	// Header creation
+	result.SetCellValue(ableCodeSheet, "A1", "使用回数")
+	result.SetCellValue(ableCodeSheet, "B1", "商品名 / 規格")
+	result.SetCellValue(disableCodeSheet, "A1", "商品コード")
+	result.SetCellValue(disableCodeSheet, "B1", "商品名 / 規格")
+	// The product code in the sales invoice is linked to the product master, but the product name in the sales invoice can change in many ways.
+	// There are probably more than 80% of the product codes in the product master that are not needed.
 	i, j := 2, 2
 	shohinCodeCounter := map[string]int{}
 	cellAdressMemory := map[string]string{}
-	// インポートデータファイルの形式
+	// Import data file format
 	// [売上明細シート]商品コード,商品名,規格,登録ユーザID,登録日
 	// [商品マスタシート]商品コード,商品名,規格,登録ユーザID,登録日
-	// エクスポートデータファイルの形式
+	// Export data file format
 	// [有効シート]使用回数,商品マスタの商品コード,商品マスタの<商品名+規格>,売上明細の<商品名+規格>
 	// [無効シート]商品マスタの商品コード,商品マスタの商品名
 	for _, shohinRow := range shohinRows {
 		shohinCode := shohinRow[0]
-		for _, uriageRow := range uriageRows { // 商品マスタ内の商品コードが売上で使われていることが分かったらresultに保存
+		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
 			if uriageRow[0] == shohinCode {
 				if _, isThere := shohinCodeCounter[shohinCode]; isThere { // 既出の商品コードだった場合商品名を連ねる
-					// 使用回数のインクリメント
+					// Increment the number of uses
 					shohinCodeCounter[shohinCode]++
 					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
-					// 商品名を追記するセル番地の更新
+					// Update the cell number to add the product name.
 					c, r, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
 					shohinNameCell, _ := excelize.CoordinatesToCellName(c+shohinCodeCounter[shohinCode], r)
-					// 商品名と規格を結合
+					// Combining product name and standard name
 					uriageDetail := uriageRow[1]
 					if uriageRow[2] != "" {
 						uriageDetail = uriageRow[1] + " / " + uriageRow[2]
 					}
-					// 商品名+規格を記入
 					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageDetail)
-				} else { //新規の商品コードだった場合有効シートに記入
+				} else { //If it is a new product code, fill in the valid sheet.
 					cellAdress, _ := excelize.CoordinatesToCellName(1, i)
 					shohinCodeCounter[shohinCode] = 1
 					cellAdressMemory[shohinCode] = cellAdress
-					// 使用回数の初期値
+					// Initialize the number of uses
 					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
-					// 商品コードを記入するセル番地の更新
+					// Update the cell number to add the product name.
 					c, _, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
 					tmpCell, _ := excelize.CoordinatesToCellName(c, i)
-					// 商品コードを記入
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinCode)
-					// 商品名+規格を記入するセル番地の更新
+					// Update the cell number to enter the product name + standard.
 					tmpCell, _ = excelize.CoordinatesToCellName(c+1, i)
-					// 商品名と規格を結合
+					// Combining product name and standard name
 					shohinDetail := shohinRow[1]
 					if shohinRow[2] != "" {
 						shohinDetail = shohinRow[1] + " / " + shohinRow[2]
 					}
-					// 商品名+規格を記入
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinDetail)
-					// 行番号をインクリメント
+					// Increment the line number
 					i++
 				}
 			}
@@ -103,7 +102,7 @@ func main() {
 			cellAdress, _ := excelize.CoordinatesToCellName(1, j)
 			result.SetCellValue(disableCodeSheet, cellAdress, shohinCode)
 			cellAdress, _ = excelize.CoordinatesToCellName(2, j)
-			// 商品名と規格を結合
+			// Combining product name and standard name
 			shohinDetail := shohinRow[1]
 			if shohinRow[2] != "" {
 				shohinDetail = shohinRow[1] + " / " + shohinRow[2]
@@ -112,7 +111,7 @@ func main() {
 			j++
 		}
 	}
-	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil { // 出力用ファイルを保存
+	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil { // Save the file for output.
 		fmt.Println(err)
 	}
 }
