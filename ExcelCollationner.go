@@ -44,9 +44,9 @@ func main() {
 	}
 	// Header creation
 	result.SetCellValue(ableCodeSheet, "A1", "使用回数")
-	result.SetCellValue(ableCodeSheet, "B1", "(マスタ)商品コード")
-	result.SetCellValue(ableCodeSheet, "C1", "(マスタ)商品名 / 規格")
-	result.SetCellValue(ableCodeSheet, "D1", "(売上明細)商品名 / 規格")
+	result.SetCellValue(ableCodeSheet, "B1", "商品コード")
+	result.SetCellValue(ableCodeSheet, "C1", "商品マスタ")
+	result.SetCellValue(ableCodeSheet, "D1", "売上明細")
 	result.SetCellValue(disableCodeSheet, "A1", "商品コード")
 	result.SetCellValue(disableCodeSheet, "B1", "商品名 / 規格")
 	// The product code in the sales invoice is linked to the product master, but the product name in the sales invoice can change in many ways.
@@ -69,34 +69,46 @@ func main() {
 					shohinCodeCounter[shohinCode]++
 					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
 					// Update the cell number to add the product name.
-					c, r, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
-					shohinNameCell, _ := excelize.CoordinatesToCellName(c+shohinCodeCounter[shohinCode], r)
-					// Combining product name and standard name
-					uriageDetail := uriageRow[1]
-					if uriageRow[2] != "" {
-						uriageDetail = uriageRow[1] + " / " + uriageRow[2]
-					}
-					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageDetail)
+					_, r, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
+					shohinNameCell, _ := excelize.CoordinatesToCellName(shohinCodeCounter[shohinCode]+2, r)
+					standardNameCell, _ := excelize.CoordinatesToCellName(shohinCodeCounter[shohinCode]+2, r+1)
+					dateCell, _ := excelize.CoordinatesToCellName(shohinCodeCounter[shohinCode]+2, r+2)
+					tmpCell, _ := excelize.CoordinatesToCellName(1, r+1)
+					result.SetCellValue(ableCodeSheet, tmpCell, shohinCodeCounter[shohinCode])
+					tmpCell, _ = excelize.CoordinatesToCellName(1, r+2)
+					result.SetCellValue(ableCodeSheet, tmpCell, shohinCodeCounter[shohinCode])
+					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageRow[1])
+					result.SetCellValue(ableCodeSheet, standardNameCell, uriageRow[2])
+					result.SetCellValue(ableCodeSheet, dateCell, uriageRow[4])
 				} else { //If it is a new product code, fill in the valid sheet.
 					cellAdress, _ := excelize.CoordinatesToCellName(1, i)
+					// Initialize the number of uses
+					result.SetCellValue(ableCodeSheet, cellAdress, 1)
 					shohinCodeCounter[shohinCode] = 1
 					cellAdressMemory[shohinCode] = cellAdress
-					// Initialize the number of uses
-					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
-					// Update the cell number to add the product name.
+					// 商品コード
 					c, _, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
-					tmpCell, _ := excelize.CoordinatesToCellName(c+1, i)
+					tmpCell, _ := excelize.CoordinatesToCellName(c, i+1)
+					result.SetCellValue(ableCodeSheet, tmpCell, 1)
+					tmpCell, _ = excelize.CoordinatesToCellName(c, i+2)
+					result.SetCellValue(ableCodeSheet, tmpCell, 1)
+					tmpCell, _ = excelize.CoordinatesToCellName(c+1, i)
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinCode)
-					// Update the cell number to enter the product name + standard.
+					tmpCell, _ = excelize.CoordinatesToCellName(c+1, i+1)
+					result.SetCellValue(ableCodeSheet, tmpCell, "規格")
+					tmpCell, _ = excelize.CoordinatesToCellName(c+1, i+2)
+					result.SetCellValue(ableCodeSheet, tmpCell, "登録日")
+					//商品名
 					tmpCell, _ = excelize.CoordinatesToCellName(c+2, i)
-					// Combining product name and standard name
-					shohinDetail := shohinRow[1]
-					if shohinRow[2] != "" {
-						shohinDetail = shohinRow[1] + "\n" + shohinRow[2]
-					}
-					result.SetCellValue(ableCodeSheet, tmpCell, shohinDetail)
+					result.SetCellValue(ableCodeSheet, tmpCell, shohinRow[1])
+					//規格名
+					tmpCell, _ = excelize.CoordinatesToCellName(c+2, i+1)
+					result.SetCellValue(ableCodeSheet, tmpCell, shohinRow[2])
+					//登録日
+					tmpCell, _ = excelize.CoordinatesToCellName(c+2, i+2)
+					result.SetCellValue(ableCodeSheet, tmpCell, shohinRow[4])
 					// Increment the line number
-					i++
+					i = i + 3
 				}
 			}
 		}
@@ -104,12 +116,11 @@ func main() {
 			cellAdress, _ := excelize.CoordinatesToCellName(1, j)
 			result.SetCellValue(disableCodeSheet, cellAdress, shohinCode)
 			cellAdress, _ = excelize.CoordinatesToCellName(2, j)
-			// Combining product name and standard name
-			shohinDetail := shohinRow[1]
-			if shohinRow[2] != "" {
-				shohinDetail = shohinRow[1] + " / " + shohinRow[2]
-			}
-			result.SetCellValue(disableCodeSheet, cellAdress, shohinDetail)
+			result.SetCellValue(disableCodeSheet, cellAdress, shohinRow[1])
+			cellAdress, _ = excelize.CoordinatesToCellName(3, j)
+			result.SetCellValue(disableCodeSheet, cellAdress, shohinRow[2])
+			cellAdress, _ = excelize.CoordinatesToCellName(3, j)
+			result.SetCellValue(disableCodeSheet, cellAdress, shohinRow[4])
 			j++
 		}
 	}
