@@ -44,7 +44,9 @@ func main() {
 	}
 	// Header creation
 	result.SetCellValue(ableCodeSheet, "A1", "使用回数")
-	result.SetCellValue(ableCodeSheet, "B1", "商品名 / 規格")
+	result.SetCellValue(ableCodeSheet, "B1", "(マスタ)商品コード")
+	result.SetCellValue(ableCodeSheet, "C1", "(マスタ)商品名 / 規格")
+	result.SetCellValue(ableCodeSheet, "D1", "(売上明細)商品名 / 規格")
 	result.SetCellValue(disableCodeSheet, "A1", "商品コード")
 	result.SetCellValue(disableCodeSheet, "B1", "商品名 / 規格")
 	// The product code in the sales invoice is linked to the product master, but the product name in the sales invoice can change in many ways.
@@ -62,7 +64,7 @@ func main() {
 		shohinCode := shohinRow[0]
 		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
 			if uriageRow[0] == shohinCode {
-				if _, isThere := shohinCodeCounter[shohinCode]; isThere { // 既出の商品コードだった場合商品名を連ねる
+				if _, isThere := shohinCodeCounter[shohinCode]; isThere { // If the product code is already known, add the product name.
 					// Increment the number of uses
 					shohinCodeCounter[shohinCode]++
 					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
@@ -83,14 +85,14 @@ func main() {
 					result.SetCellValue(ableCodeSheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
 					// Update the cell number to add the product name.
 					c, _, _ := excelize.CellNameToCoordinates(cellAdressMemory[shohinCode])
-					tmpCell, _ := excelize.CoordinatesToCellName(c, i)
+					tmpCell, _ := excelize.CoordinatesToCellName(c+1, i)
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinCode)
 					// Update the cell number to enter the product name + standard.
-					tmpCell, _ = excelize.CoordinatesToCellName(c+1, i)
+					tmpCell, _ = excelize.CoordinatesToCellName(c+2, i)
 					// Combining product name and standard name
 					shohinDetail := shohinRow[1]
 					if shohinRow[2] != "" {
-						shohinDetail = shohinRow[1] + " / " + shohinRow[2]
+						shohinDetail = shohinRow[1] + "\n" + shohinRow[2]
 					}
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinDetail)
 					// Increment the line number
