@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/xuri/excelize/v2"
+
+	"strings"
 )
 
 const exportFolderPath string = "./export/"
@@ -62,9 +64,12 @@ func main() {
 	// ./data/select.sql
 	// CAUTION: No header required.
 	for k, shohinRow := range shohinRows {
-		shohinCode := shohinRow[0]
+		shohinCode := strings.TrimSpace(shohinRow[0])
+		shohinName := strings.TrimSpace(shohinRow[1])
 		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
-			if uriageRow[0] == shohinCode {
+			uriageShohinCode := strings.TrimSpace(uriageRow[0])
+			uriageShohinName := strings.TrimSpace(uriageRow[1])
+			if uriageShohinCode == shohinCode {
 				if _, isThere := shohinCodeCounter[shohinCode]; isThere { // If the product code is already known, add the product name.
 					// Increment the number of uses
 					shohinCodeCounter[shohinCode]++
@@ -78,12 +83,12 @@ func main() {
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinCodeCounter[shohinCode])
 					tmpCell, _ = excelize.CoordinatesToCellName(1, r+2)
 					result.SetCellValue(ableCodeSheet, tmpCell, shohinCodeCounter[shohinCode])
-					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageRow[1])
+					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageShohinName)
 					result.SetCellValue(ableCodeSheet, standardNameCell, uriageRow[2])
 					result.SetCellValue(ableCodeSheet, dateCell, uriageRow[4])
-					if uriageRow[1] != shohinRow[1] {
-						if !sliceContains(thesaurus[shohinRow[1]], uriageRow[1]) {
-							thesaurus[shohinRow[1]] = append(thesaurus[shohinRow[1]], uriageRow[1])
+					if uriageShohinName != shohinName {
+						if !sliceContains(thesaurus[shohinName], uriageShohinName) {
+							thesaurus[shohinName] = append(thesaurus[shohinName], uriageShohinName)
 						}
 					}
 				} else { //If it is a new product code, fill in the valid sheet.
