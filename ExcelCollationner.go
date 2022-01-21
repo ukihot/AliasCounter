@@ -7,19 +7,20 @@ import (
 )
 
 const exportFolderPath string = "./export/"
-const inputFolderPath string = "./data/"
-const inputFileName string = "database.xlsx"
+const importFolderPath string = "./import/"
+const importFileName string = "database.xlsx"
 const exportFileName string = "Result.xlsx"
 const shohinMasterSheet string = "shohin"
 const uriageMeisaiSheet string = "uriage"
-const ableCodeSheet string = "有効商品コード"
-const disableCodeSheet string = "無効商品コード"
+const ableCodeSheet string = "移行対象"
+const disableCodeSheet string = "DELETE候補"
+const checkSheet string = "差異表"
 
 // Variable names are unified in Lower CamelCase.
 // Prohibit the use of pascal cases and snake cases.
 func main() {
 	// Open the data file to be processed.
-	database, err := excelize.OpenFile(inputFolderPath + inputFileName)
+	database, err := excelize.OpenFile(importFolderPath + importFileName)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -55,11 +56,8 @@ func main() {
 	shohinCodeCounter := map[string]int{}
 	cellAdressMemory := map[string]string{}
 	// Import data file format
-	// [売上明細シート]商品コード,商品名,規格,登録ユーザID,登録日
-	// [商品マスタシート]商品コード,商品名,規格,登録ユーザID,登録日
-	// Export data file format
-	// [有効シート]使用回数,商品マスタの商品コード,商品マスタの<商品名+規格>,売上明細の<商品名+規格>
-	// [無効シート]商品マスタの商品コード,商品マスタの商品名
+	// ./data/shohin.sql
+	// CAUTION: No header required.
 	for _, shohinRow := range shohinRows {
 		shohinCode := shohinRow[0]
 		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
