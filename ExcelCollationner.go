@@ -29,6 +29,7 @@ func main() {
 	result := excelize.NewFile()
 	result.NewSheet(ableCodeSheet)
 	result.NewSheet(disableCodeSheet)
+	result.NewSheet(checkSheet)
 	result.DeleteSheet("Sheet1")
 	result.SetActiveSheet(0)
 	// Retrieves the values of all cells in each row of the product master and stores them as a two-dimensional array.
@@ -55,10 +56,12 @@ func main() {
 	i, j := 2, 2
 	shohinCodeCounter := map[string]int{}
 	cellAdressMemory := map[string]string{}
+	thesaurus := map[string][]string{}
+
 	// Import data file format
-	// ./data/shohin.sql
+	// ./data/select.sql
 	// CAUTION: No header required.
-	for _, shohinRow := range shohinRows {
+	for k, shohinRow := range shohinRows {
 		shohinCode := shohinRow[0]
 		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
 			if uriageRow[0] == shohinCode {
@@ -78,6 +81,11 @@ func main() {
 					result.SetCellValue(ableCodeSheet, shohinNameCell, uriageRow[1])
 					result.SetCellValue(ableCodeSheet, standardNameCell, uriageRow[2])
 					result.SetCellValue(ableCodeSheet, dateCell, uriageRow[4])
+					if uriageRow[1] != shohinRow[1] {
+						if !sliceContains(thesaurus[shohinRow[1]], uriageRow[1]) {
+							thesaurus[shohinRow[1]] = append(thesaurus[shohinRow[1]], uriageRow[1])
+						}
+					}
 				} else { //If it is a new product code, fill in the valid sheet.
 					cellAdress, _ := excelize.CoordinatesToCellName(1, i)
 					// Initialize the number of uses
@@ -110,6 +118,7 @@ func main() {
 				}
 			}
 		}
+		// Creating a Delete Table
 		if _, isThere := shohinCodeCounter[shohinCode]; !isThere {
 			cellAdress, _ := excelize.CoordinatesToCellName(1, j)
 			result.SetCellValue(disableCodeSheet, cellAdress, shohinCode)
@@ -120,9 +129,25 @@ func main() {
 			cellAdress, _ = excelize.CoordinatesToCellName(3, j)
 			result.SetCellValue(disableCodeSheet, cellAdress, shohinRow[4])
 			j++
+		} else {
+			cellAdress, _ := excelize.CoordinatesToCellName(1, k+1)
+			result.SetCellValue(checkSheet, cellAdress, shohinCode)
+			cellAdress, _ = excelize.CoordinatesToCellName(2, k+1)
+			result.SetCellValue(checkSheet, cellAdress, shohinRow[1])
+			cellAdress, _ = excelize.CoordinatesToCellName(3, k+1)
+			result.SetCellValue(checkSheet, cellAdress, thesaurus[shohinRow[1]])
 		}
 	}
 	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil { // Save the file for output.
 		fmt.Println(err)
 	}
+}
+
+func sliceContains(arr []string, str string) bool {
+	for _, v := range arr {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }

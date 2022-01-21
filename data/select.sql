@@ -20,4 +20,6 @@ from
 where
     UM_D_REGYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
 or  UM_D_EDTYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
+order by
+    UM_D_EDTYMD desc
 ;
