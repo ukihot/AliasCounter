@@ -88,7 +88,7 @@ func main() {
 					result.SetCellValue(ableCodeSheet, dateCell, uriageRow[4])
 					if uriageShohinName != shohinName {
 						if !sliceContains(thesaurus[shohinName], uriageShohinName) {
-							thesaurus[shohinName] = append(thesaurus[shohinName], uriageShohinName)
+							thesaurus[shohinName] = append(thesaurus[shohinName], uriageShohinName+",")
 						}
 					}
 				} else { //If it is a new product code, fill in the valid sheet.
@@ -134,13 +134,13 @@ func main() {
 			cellAdress, _ = excelize.CoordinatesToCellName(3, j)
 			result.SetCellValue(disableCodeSheet, cellAdress, shohinRow[4])
 			j++
-		} else {
+		} else if alias, isThere := thesaurus[shohinRow[1]]; isThere {
 			cellAdress, _ := excelize.CoordinatesToCellName(1, k+1)
 			result.SetCellValue(checkSheet, cellAdress, shohinCode)
 			cellAdress, _ = excelize.CoordinatesToCellName(2, k+1)
 			result.SetCellValue(checkSheet, cellAdress, shohinRow[1])
 			cellAdress, _ = excelize.CoordinatesToCellName(3, k+1)
-			result.SetCellValue(checkSheet, cellAdress, thesaurus[shohinRow[1]])
+			result.SetCellValue(checkSheet, cellAdress, alias)
 		}
 	}
 	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil { // Save the file for output.
