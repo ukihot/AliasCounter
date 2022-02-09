@@ -112,15 +112,15 @@ func main() {
 			} else {
 				// 商品コード使用回数をインクリメント
 				shohinCodeCounter[shohinCode]++
-				// 1列目：商品コード総使用回数
-				tmpCell, _ := excelize.CoordinatesToCellName(1, cellRowMemory[shohinCode])
-				result.SetCellValue(uriageTantoName, tmpCell, shohinCodeCounter[shohinCode])
-				tmpCell, _ = excelize.CoordinatesToCellName(10, cellRowMemory[shohinCode])
+				tmpCell, _ := excelize.CoordinatesToCellName(10, cellRowMemory[shohinCode])
 				result.SetCellValue(uriageTantoName, tmpCell, "hoge")
 				// マスタと違う商品名で販売しているか
 				RegisterThesaurus(shohinThesaurus, shohinCode, uriageShohinName, uriageShohinNameCounter, kikakuThesaurus, kikakuName, uriageKikakuName, uriageKikakuNameCounter, shohinName)
 			}
 		}
+		// 1列目：商品コード総使用回数
+		tmpCell, _ := excelize.CoordinatesToCellName(1, cellRowMemory[shohinCode])
+		result.SetCellValue(uriageTantoName, tmpCell, shohinCodeCounter[shohinCode])
 		// 1商品コードについて全売上情報を参照した状態
 		//
 		// 商品シソーラスがあれば商品コードに紐づく行にて横展開
