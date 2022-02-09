@@ -1,2 +1,5 @@
-# ExcelCollationner
-商品マスタと売上明細の照合用ツール
+# ALIAS_COUNTER
+
+## 利用方法
+
+なし

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"strconv"
+
+	"github.com/cheggaaa/pb/v3"
 )
 
 const exportFolderPath string = "./export/"
@@ -21,7 +23,10 @@ const aliasSummarySheet string = "ALIAS_SUMMARY_SHEET"
 // Variable names are unified in Lower CamelCase.
 // Prohibit the use of pascal cases and snake cases.
 func main() {
-	// Open the data file to be processed.
+	// [1.4万行]×[57万行]の2重Loopが遅すぎるため、商品コード1レコード読むたびに進捗率を更新
+	bar := pb.StartNew(13950)
+	bar.SetMaxWidth(80)
+	// SQL実行を保存したExcelファイル、ヘッダ消しといてね。
 	database, err := excelize.OpenFile(importFolderPath + importFileName)
 	if err != nil {
 		fmt.Println(err)
@@ -29,9 +34,6 @@ func main() {
 	}
 	// Create an output file.
 	result := excelize.NewFile()
-	result.NewSheet(aliasSummarySheet)
-	result.DeleteSheet("Sheet1")
-	result.SetActiveSheet(0)
 	// Retrieves the values of all cells in each row of the product master and stores them as a two-dimensional array.
 	shohinRows, err := database.GetRows(shohinMasterSheet)
 	if err != nil {
@@ -44,87 +46,150 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	// Header creation
-	result.SetCellValue(aliasSummarySheet, "A1", "使用回数")
-	result.SetCellValue(aliasSummarySheet, "B1", "商品コード")
-	result.SetCellValue(aliasSummarySheet, "C1", "商品マスタ")
-	result.SetCellValue(aliasSummarySheet, "D1", "売上明細")
 	// The product code in the sales invoice is linked to the product master, but the product name in the sales invoice can change in many ways.
 	// There are probably more than 80% of the product codes in the product master that are not needed.
-	i := 2
 	shohinCodeCounter := map[string]int{}
-	thesaurus := map[string][]string{}
+	shohinThesaurus := map[string][]string{}
+	kikakuThesaurus := map[string][]string{}
 	uriageShohinNameCounter := map[string]int{}
-	cellAdressMemory := map[string]string{}
+	uriageKikakuNameCounter := map[string]int{}
+	cellRowMemory := map[string]int{}
+	sheetMemory := map[string]string{}
+	lastRowBySheet := map[string]int{}
+	var shohinCode string
+	var shohinName string
+	var kikakuName string
+	var uriageShohinCode string
+	var uriageShohinName string
+	var uriageKikakuName string
+	var uriageTantoName string
+	// var uriageDate string
+	// var tokuisakiName string
+	// var shiiresakiName string
+	// var jigyoshoName string
 
 	// Import data file format
 	// ./data/select.sql
 	// CAUTION: No header required.
 	for _, shohinRow := range shohinRows {
-		shohinCode := strings.TrimSpace(shohinRow[0])
-		shohinName := strings.TrimSpace(shohinRow[1])
-		for _, uriageRow := range uriageRows { // If you find that a product code in the product master is used in sales, save it in result.
-			uriageShohinCode := strings.TrimSpace(uriageRow[0])
-			uriageShohinName := strings.TrimSpace(uriageRow[1])
-			uriageKikakuName := strings.TrimSpace(uriageRow[2])
-			uriageTantoName := strings.TrimSpace(uriageRow[3])
-			// uriageDate := strings.TrimSpace(uriageRow[4])
+		shohinCode = strings.TrimSpace(shohinRow[0])
+		shohinName = strings.TrimSpace(shohinRow[1])
+		kikakuName = strings.TrimSpace(shohinRow[2])
+		// If you find that a product code in the product master is used in sales, save it in result.
+		for _, uriageRow := range uriageRows {
+			uriageShohinCode = strings.TrimSpace(uriageRow[0])
+			uriageShohinName = strings.TrimSpace(uriageRow[1])
+			uriageKikakuName = strings.TrimSpace(uriageRow[2])
+			uriageTantoName = strings.TrimSpace(uriageRow[3])
+			// uriageDate = strings.TrimSpace(uriageRow[4])
+			// tokuisakiName = strings.TrimSpace(uriageRow[5])
+			// shiiresakiName = strings.TrimSpace(uriageRow[6])
+			// jigyoshoName = strings.TrimSpace(uriageRow[7])
+			// 商品コードが合致しないものは無視
 			if shohinCode != uriageShohinCode {
 				continue
 			}
-			if _, isThere := shohinCodeCounter[shohinCode]; isThere { // If the product code is already known, add the product name.
-				// Increment the number of uses
-				shohinCodeCounter[shohinCode]++
-				result.SetCellValue(aliasSummarySheet, cellAdressMemory[shohinCode], shohinCodeCounter[shohinCode])
-				if uriageShohinName != shohinName {
-					//登録済みでない
-					if !sliceContains(thesaurus[shohinName], uriageShohinName) {
-						thesaurus[shohinName] = append(thesaurus[shohinName], uriageShohinName)
-						uriageShohinNameCounter[uriageShohinName] = 1
-					} else {
-						// 登録済みなら別称利用回数をインクリメント
-						uriageShohinNameCounter[uriageShohinName]++
-					}
-				}
-			} else { // Only works the first time.
-				tmpCell, _ := excelize.CoordinatesToCellName(1, i)
-				cellAdressMemory[shohinCode] = tmpCell
-				result.SetCellValue(aliasSummarySheet, tmpCell, 1)
-				tmpCell, _ = excelize.CoordinatesToCellName(2, i)
-				result.SetCellValue(aliasSummarySheet, tmpCell, shohinCode)
-				tmpCell, _ = excelize.CoordinatesToCellName(2, i+1)
-				result.SetCellValue(aliasSummarySheet, tmpCell, uriageTantoName)
-				//商品名
-				tmpCell, _ = excelize.CoordinatesToCellName(3, i)
-				result.SetCellValue(aliasSummarySheet, tmpCell, shohinName)
-				//規格名
-				tmpCell, _ = excelize.CoordinatesToCellName(3, i+1)
-				result.SetCellValue(aliasSummarySheet, tmpCell, uriageKikakuName)
+			// 売上担当者ごとにシート分ける
+			MakeSheet(result, uriageTantoName, lastRowBySheet, uriageShohinName)
+			if _, isThere := shohinCodeCounter[shohinCode]; !isThere { // 探していた商品コード発見１回目の処理
+				sheetMemory[shohinCode] = uriageTantoName
 				// Increment the line number
-				i = i + 2
 				shohinCodeCounter[shohinCode] = 1
+				// 1列目：商品コード総使用回数
+				tmpCell, _ := excelize.CoordinatesToCellName(1, lastRowBySheet[uriageTantoName])
+				result.SetCellValue(uriageTantoName, tmpCell, shohinCodeCounter[shohinCode])
+				// 2列目：商品名
+				tmpCell, _ = excelize.CoordinatesToCellName(2, lastRowBySheet[uriageTantoName])
+				result.SetCellValue(uriageTantoName, tmpCell, shohinName)
+				// 3列目：規格名
+				tmpCell, _ = excelize.CoordinatesToCellName(3, lastRowBySheet[uriageTantoName])
+				result.SetCellValue(uriageTantoName, tmpCell, kikakuName)
+				// マスタと違う商品名で販売しているか
+				RegisterThesaurus(shohinThesaurus, shohinCode, uriageShohinName, uriageShohinNameCounter, kikakuThesaurus, kikakuName, uriageKikakuName, uriageKikakuNameCounter, shohinName)
+				// セルの行を記憶して次行へ
+				cellRowMemory[shohinCode] = lastRowBySheet[uriageTantoName]
+				lastRowBySheet[uriageTantoName]++
+			} else {
+				// 商品コード使用回数をインクリメント
+				shohinCodeCounter[shohinCode]++
+				// 1列目：商品コード総使用回数
+				tmpCell, _ := excelize.CoordinatesToCellName(1, cellRowMemory[shohinCode])
+				result.SetCellValue(uriageTantoName, tmpCell, shohinCodeCounter[shohinCode])
+				tmpCell, _ = excelize.CoordinatesToCellName(10, cellRowMemory[shohinCode])
+				result.SetCellValue(uriageTantoName, tmpCell, "hoge")
+				// マスタと違う商品名で販売しているか
+				RegisterThesaurus(shohinThesaurus, shohinCode, uriageShohinName, uriageShohinNameCounter, kikakuThesaurus, kikakuName, uriageKikakuName, uriageKikakuNameCounter, shohinName)
 			}
 		}
-		//
 		// 1商品コードについて全売上情報を参照した状態
 		//
-		if alias, isThere := thesaurus[shohinName]; isThere {
-			for seed, uj := range alias {
-				cellAdress, _ := excelize.CoordinatesToCellName(4+seed, i-2)
-				result.SetCellValue(aliasSummarySheet, cellAdress, strconv.Itoa(uriageShohinNameCounter[uj])+":"+uj)
+		// 商品シソーラスがあれば商品コードに紐づく行にて横展開
+		if shohinAliases, isThere := shohinThesaurus[shohinCode]; isThere {
+			for index, shohinAlias := range shohinAliases {
+				tmpCell, _ := excelize.CoordinatesToCellName(4+index, cellRowMemory[shohinCode])
+				result.SetCellValue(sheetMemory[shohinCode], tmpCell, shohinAlias+"("+strconv.Itoa(uriageShohinNameCounter[shohinAlias])+")")
 			}
 		}
+		bar.Increment()
 	}
-	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil { // Save the file for output.
+	if err := result.SaveAs(exportFolderPath + exportFileName); err != nil {
 		fmt.Println(err)
 	}
+	result.DeleteSheet("Sheet1")
+	bar.Finish()
 }
 
-func sliceContains(arr []string, str string) bool {
+// SliceContains ...
+func SliceContains(arr []string, str string) bool {
 	for _, v := range arr {
 		if v == str {
 			return true
 		}
 	}
 	return false
+}
+
+// IsExistSheet ...
+func IsExistSheet(result *excelize.File, str string) bool {
+	Sheets := result.GetSheetMap()
+	for _, sheet := range Sheets {
+		if sheet == str {
+			return false
+		}
+	}
+	return true
+}
+
+// MakeSheet ...
+func MakeSheet(result *excelize.File, str string, lastRowBySheet map[string]int, uriageTantoName string) {
+	if !IsExistSheet(result, str) {
+		return
+	}
+	// 1行目はヘッダがあるので2行目から
+	lastRowBySheet[uriageTantoName] = 2
+	result.NewSheet(str)
+	// Header creation
+	result.SetCellValue(str, "A1", "総使用回数")
+	result.SetCellValue(str, "B1", "商品名[商品マスタ]")
+	result.SetCellValue(str, "C1", "規格名[商品マスタ]")
+}
+
+// RegisterThesaurus ...
+func RegisterThesaurus(shohinThesaurus map[string][]string, shohinCode string, uriageShohinName string, uriageShohinNameCounter map[string]int, kikakuThesaurus map[string][]string, kikakuName string, uriageKikakuName string, uriageKikakuNameCounter map[string]int, shohinName string) {
+	// シソーラスに未登録の売り商品名
+	if shohinName != uriageShohinName && !SliceContains(shohinThesaurus[shohinCode], uriageShohinName) {
+		shohinThesaurus[shohinCode] = append(shohinThesaurus[shohinCode], uriageShohinName)
+		uriageShohinNameCounter[uriageShohinName] = 1
+	} else {
+		// 登録済みなら別称利用回数をインクリメント
+		uriageShohinNameCounter[uriageShohinName]++
+	}
+	// シソーラスに未登録の売り規格名
+	if kikakuName != uriageShohinName && !SliceContains(kikakuThesaurus[kikakuName], uriageKikakuName) {
+		kikakuThesaurus[kikakuName] = append(kikakuThesaurus[kikakuName], uriageKikakuName)
+		uriageKikakuNameCounter[uriageKikakuName] = 1
+	} else {
+		// 登録済みなら別称利用回数をインクリメント
+		uriageKikakuNameCounter[uriageKikakuName]++
+	}
 }

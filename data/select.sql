@@ -7,9 +7,6 @@ select
     SH_REGYMD
 from
     m_shohin
-where
-    m_shohin.SH_D_REGYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
-or  m_shohin.SH_D_EDTYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
 ;
 --*Datatitle uriage
 select
@@ -19,7 +16,8 @@ select
     M_TANTO.TA_TANM,
     T_URIAGEM.UM_KEIYMD,
     M_TOKUI.TK_TKNM,
-    T_URIAGEM.UM_SINM
+    T_URIAGEM.UM_SINM,
+    M_JIGYO.JG_JGNM
 from
     T_URIAGEM
     inner join
@@ -28,6 +26,9 @@ from
     inner join
         M_TANTO
     on  M_TOKUI.TK_UTACD = M_TANTO.TA_TACD
+    inner join
+        M_JIGYO
+    on  T_URIAGEM.UM_JGCD = M_JIGYO.JG_JGCD
 where
     T_URIAGEM.UM_D_REGYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
 or  T_URIAGEM.UM_D_EDTYMD >= to_date('2015-01-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')
