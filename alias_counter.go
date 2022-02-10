@@ -2,14 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/xuri/excelize/v2"
-
-	"strings"
-
-	"time"
-
-	"sync"
 )
 
 const exportFolderPath string = "./export/"
@@ -18,7 +14,6 @@ const importFileName string = "database.xlsx"
 const exportFileName string = "Result.xlsx"
 const shohinMasterSheet string = "shohin"
 const uriageMeisaiSheet string = "uriage"
-const aliasSummarySheet string = "ALIAS_SUMMARY_SHEET"
 
 var shohinRows [][]string
 var uriageRows [][]string
@@ -27,11 +22,12 @@ var f *excelize.File
 // Variable names are unified in Lower CamelCase.
 // Prohibit the use of pascal cases and snake cases.
 
-// AliasSender ...
-func AliasSender(shohinCode string, shohinName string, kikakuName string, shohinThesaurusChannel chan<- map[string][]string, shohinCodeCounterChannel chan<- map[string]int) {
+// UriageAnalysis ...
+func UriageAnalysis(shohinCode string, shohinName string, kikakuName string, shohinThesaurusChannel chan<- map[string][]string, shohinCodeCounterChannel chan<- map[string]int) {
 	shohinThesaurus := map[string][]string{}
 	shohinCodeCouner := map[string]int{}
 
+	// 7年分の売上情報を走査
 	for _, uriageRow := range uriageRows {
 		uriageShohinCode := strings.TrimSpace(uriageRow[0])
 		uriageShohinName := strings.TrimSpace(uriageRow[1])
@@ -40,12 +36,14 @@ func AliasSender(shohinCode string, shohinName string, kikakuName string, shohin
 		if shohinCode != uriageShohinCode {
 			continue
 		}
+
 		// 売上明細の中に当該商品コードを発見したのでカウント
 		if _, found := shohinCodeCouner[shohinCode]; found {
 			shohinCodeCouner[shohinCode]++
 		} else {
 			shohinCodeCouner[shohinCode] = 1
 		}
+
 		// 商品シソーラスに未登録であれば登録
 		if (shohinName != uriageShohinName) && !SliceContains(shohinThesaurus[shohinCode], uriageShohinName) {
 			shohinThesaurus[shohinCode] = append(shohinThesaurus[shohinCode], uriageShohinName)
@@ -73,13 +71,43 @@ func WriteToCell(s string, r int, c int, t string) {
 	f.SetCellValue(s, tmpCell, t)
 }
 
-func Summary(){
-	
+// IsExistSheet ...
+func IsExistSheet(str string) bool {
+	Sheets := f.GetSheetMap()
+	for _, sheet := range Sheets {
+		if sheet == str {
+			return false
+		}
+	}
+	return true
 }
 
-func main() {
-	// 計測用
-	start := time.Now()
+// MakeSheet ...
+func MakeSheet(str string, lastRowBySheet map[string]int, JigyosyoName string) {
+	if !IsExistSheet(str) {
+		return
+	}
+	// 1行目はヘッダがあるので2行目から
+	lastRowBySheet[JigyosyoName] = 2
+	f.NewSheet(str)
+	// Header creation
+	f.SetCellValue(str, "A1", "総使用回数")
+	f.SetCellValue(str, "B1", "商品名[商品マスタ]")
+	f.SetCellValue(str, "C1", "規格名[商品マスタ]")
+}
+
+// OutputToExcel ...
+// 事業所別にシート分け
+// 売上日 | 担当者 | マスタ商品名 | マスタ規格名 | 売り商品名 | 売り規格名 | 得意先 | 仕入先
+func OutputToExcel(shohinThesaurus map[string][]string, shohinCodeCounerThesaurus map[string]int) {
+	// Result.xlsxとして結果を保存
+	if err := f.SaveAs(exportFolderPath + exportFileName); err != nil {
+		fmt.Println(err)
+	}
+}
+
+// InputFromExcel ...
+func InputFromExcel() {
 	// SQL実行を保存したExcelファイル、ヘッダ消しといてね。
 	database, err := excelize.OpenFile(importFolderPath + importFileName)
 	if err != nil {
@@ -100,10 +128,17 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+}
+
+func main() {
+	InputFromExcel()
 	// 各ゴルーチンがこの商品コードにはこれだけの別名利用がありましたよと報告するためのチャネル
 	shohinThesaurusChannel := make(chan map[string][]string, len(shohinRows))
 	shohinCodeCounterChannel := make(chan map[string]int, len(shohinRows))
 	wg := new(sync.WaitGroup)
+	// 別称利用を格納するシソーラス
+	shohinThesaurus := map[string][]string{}
+	shohinCodeCounerThesaurus := map[string]int{}
 
 	for _, shohinRow := range shohinRows {
 		shohinCode := strings.TrimSpace(shohinRow[0])
@@ -113,27 +148,28 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			AliasSender(shohinCode, shohinName, kikakuName, shohinThesaurusChannel, shohinCodeCounterChannel)
+			UriageAnalysis(shohinCode, shohinName, kikakuName, shohinThesaurusChannel, shohinCodeCounterChannel)
 		}()
 	}
+	// ゴルーチンの全完了を検知
 	wg.Wait()
+	// チャネルクローズ
 	close(shohinThesaurusChannel)
 	close(shohinCodeCounterChannel)
-	// 別名利用の報告を受信するたびにLoop
-	// チャネルの中が0になればnoLoop
-	Thesaurus := map[string][]string{}
-	n := 0
-	for shohinThesaurus := range shohinThesaurusChannel {
-		for shohinCode, aliases := range shohinThesaurus {
-			Thesaurus[shohinCode] = append(Thesaurus[shohinCode], aliases...)
+
+	// 商品シソーラスチャネルから全データを受信して1つのmapにmerge
+	for aliasPage := range shohinThesaurusChannel {
+		for shohinCode, aliases := range aliasPage {
+			shohinThesaurus[shohinCode] = append(shohinThesaurus[shohinCode], aliases...)
 		}
-		n++
-		println("受信:", n, "回目")
 	}
-	println("完了")
-	// Result.xlsxとして結果を保存
-	if err := f.SaveAs(exportFolderPath + exportFileName); err != nil {
-		fmt.Println(err)
+
+	// 商品コードカウンターチャネルから全データを受信して1つのmapにmerge
+	for shohinCodeCounterPage := range shohinCodeCounterChannel {
+		for shohinCode, counts := range shohinCodeCounterPage {
+			shohinCodeCounerThesaurus[shohinCode] = counts
+		}
 	}
-	fmt.Printf("%f秒\n", (time.Now().Sub(start)).Seconds())
+
+	OutputToExcel(shohinThesaurus, shohinCodeCounerThesaurus)
 }
